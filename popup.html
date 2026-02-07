@@ -7,7 +7,7 @@
       box-sizing: border-box;
     }
     body {
-      width: 280px;
+      width: 300px;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
@@ -127,6 +127,33 @@
       margin-top: 12px;
       text-align: center;
     }
+    .error {
+      background: #4a1c1c;
+      color: #ff6b6b;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 12px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .instructions {
+      background: #2d2d44;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 12px;
+      font-size: 11px;
+      color: #aaa;
+    }
+    .instructions ol {
+      margin: 6px 0 0 0;
+      padding-left: 18px;
+    }
+    .instructions li {
+      margin: 4px 0;
+    }
+    .instructions strong {
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -135,13 +162,24 @@
   <div id="idleState">
     <div class="status idle">Ready to record</div>
     <button id="startBtn">🔴 Start Recording</button>
-    <div class="info">Records current tab with audio</div>
+    
+    <div class="instructions">
+      <strong>When prompted:</strong>
+      <ol>
+        <li>Select the <strong>tab</strong> you want to record</li>
+        <li>Check ✅ <strong>"Also share tab audio"</strong></li>
+        <li>Click <strong>Allow</strong></li>
+      </ol>
+    </div>
+    
+    <div id="errorMsg" class="error hidden"></div>
   </div>
 
   <div id="recordingState" class="hidden">
     <div class="status recording">● Recording...</div>
     <div class="timer" id="timer">00:00:00</div>
     <button id="stopBtn">⏹ Stop Recording</button>
+    <div class="info">Click stop or close the sharing dialog to finish</div>
   </div>
 
   <div id="saveState" class="hidden">

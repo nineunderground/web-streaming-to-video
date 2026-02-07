@@ -16,6 +16,7 @@ const timerEl = document.getElementById('timer');
 const finalTimeEl = document.getElementById('finalTime');
 const filenameEl = document.getElementById('filename');
 const dot = document.getElementById('dot');
+const errorEl = document.getElementById('errorMsg');
 
 // Format time as HH:MM:SS
 function formatTime(ms) {
@@ -30,6 +31,21 @@ function formatTime(ms) {
 function updateTimer() {
   if (startTime) {
     timerEl.textContent = formatTime(Date.now() - startTime);
+  }
+}
+
+// Show error message
+function showError(msg) {
+  if (errorEl) {
+    errorEl.textContent = msg;
+    errorEl.classList.remove('hidden');
+  }
+}
+
+// Hide error message
+function hideError() {
+  if (errorEl) {
+    errorEl.classList.add('hidden');
   }
 }
 
@@ -48,26 +64,23 @@ function showState(state) {
 
 // Start recording
 async function startRecording() {
+  hideError();
+  
   try {
-    // Request screen capture with audio
-    stream = await navigator.mediaDevices.getDisplayMedia({
+    // Firefox-compatible options for getDisplayMedia
+    const displayMediaOptions = {
       video: {
-        displaySurface: "browser",
-        preferCurrentTab: true
+        displaySurface: "browser"
       },
-      audio: true,
-      preferCurrentTab: true,
-      selfBrowserSurface: "include",
-      systemAudio: "include",
-      surfaceSwitching: "exclude",
-      monitorTypeSurfaces: "exclude"
-    });
+      audio: true
+    };
+
+    // Request screen/tab capture
+    stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
 
     // Check if we got audio
     const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length === 0) {
-      console.log('No audio track - video only recording');
-    }
+    console.log(`Audio tracks: ${audioTracks.length}`);
 
     recordedChunks = [];
     
@@ -81,6 +94,7 @@ async function startRecording() {
     ];
     
     let mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+    console.log(`Using mime type: ${mimeType}`);
     
     mediaRecorder = new MediaRecorder(stream, { mimeType });
     
@@ -100,7 +114,7 @@ async function startRecording() {
       filenameEl.value = `recording-${timestamp}`;
     };
 
-    // Handle stream ending (user clicked "Stop sharing")
+    // Handle stream ending (user clicked "Stop sharing" in browser UI)
     stream.getVideoTracks()[0].onended = () => {
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         stopRecording();
@@ -115,7 +129,20 @@ async function startRecording() {
     
   } catch (err) {
     console.error('Error starting recording:', err);
-    alert('Could not start recording. Make sure you select the current tab and enable audio sharing.');
+    
+    let errorMsg = 'Recording failed. ';
+    
+    if (err.name === 'NotAllowedError') {
+      errorMsg = 'Permission denied. Please try again and select a tab to share.';
+    } else if (err.name === 'NotFoundError') {
+      errorMsg = 'No screen/tab found to record.';
+    } else if (err.name === 'AbortError') {
+      errorMsg = 'Recording was cancelled.';
+    } else {
+      errorMsg += err.message || 'Unknown error.';
+    }
+    
+    showError(errorMsg);
   }
 }
 
