@@ -5,7 +5,6 @@ let recordedChunks = [];
 let stream = null;
 let startTime = null;
 let timerInterval = null;
-let recordedBlob = null;
 
 // DOM elements
 const idleState = document.getElementById('idleState');
@@ -13,11 +12,12 @@ const recordingState = document.getElementById('recordingState');
 const saveState = document.getElementById('saveState');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const saveBtn = document.getElementById('saveBtn');
+const downloadLink = document.getElementById('downloadLink');
 const newBtn = document.getElementById('newBtn');
 const timerEl = document.getElementById('timer');
 const finalTimeEl = document.getElementById('finalTime');
 const filenameEl = document.getElementById('filename');
+const fileSizeEl = document.getElementById('fileSize');
 const dot = document.getElementById('dot');
 const errorEl = document.getElementById('errorMsg');
 
@@ -28,6 +28,13 @@ function formatTime(ms) {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return [h, m, s].map(n => n.toString().padStart(2, '0')).join(':');
+}
+
+// Format file size
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 // Update timer display
@@ -66,6 +73,40 @@ function showState(state) {
   dot.classList.toggle('recording', state === 'recording');
 }
 
+// Prepare download link with the recorded video
+function prepareDownload() {
+  console.log('Preparing download, chunks:', recordedChunks.length);
+  
+  if (recordedChunks.length === 0) {
+    showError('No recording data available.');
+    return;
+  }
+  
+  // Create blob
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  console.log('Blob created:', blob.size, 'bytes');
+  
+  // Show file size
+  fileSizeEl.textContent = `File size: ${formatSize(blob.size)}`;
+  
+  // Create object URL and set on download link
+  const url = URL.createObjectURL(blob);
+  downloadLink.href = url;
+  
+  // Update filename when input changes
+  updateDownloadFilename();
+}
+
+// Update the download link filename
+function updateDownloadFilename() {
+  let filename = filenameEl.value.trim() || 'recording';
+  if (!filename.endsWith('.webm')) {
+    filename += '.webm';
+  }
+  downloadLink.download = filename;
+  downloadLink.textContent = `💾 Save Video: ${filename}`;
+}
+
 // Called when recording is fully stopped
 function onRecordingStopped() {
   console.log('Recording stopped, chunks:', recordedChunks.length);
@@ -74,12 +115,6 @@ function onRecordingStopped() {
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
-  }
-  
-  // Create the blob immediately
-  if (recordedChunks.length > 0) {
-    recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-    console.log('Created blob:', recordedBlob.size, 'bytes');
   }
   
   // Update final time display
@@ -92,6 +127,9 @@ function onRecordingStopped() {
   const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
   filenameEl.value = `recording-${timestamp}`;
   
+  // Prepare the download link
+  prepareDownload();
+  
   // Show save state
   showState('save');
 }
@@ -99,6 +137,7 @@ function onRecordingStopped() {
 // Start recording
 async function startRecording() {
   hideError();
+  startBtn.disabled = true;
   console.log('Starting recording...');
   
   try {
@@ -116,7 +155,6 @@ async function startRecording() {
     console.log(`Video tracks: ${videoTracks.length}, Audio tracks: ${audioTracks.length}`);
 
     recordedChunks = [];
-    recordedBlob = null;
     
     // Find supported mime type
     const mimeTypes = [
@@ -135,27 +173,27 @@ async function startRecording() {
     mediaRecorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
         recordedChunks.push(event.data);
-        console.log(`Chunk: ${event.data.size} bytes, total chunks: ${recordedChunks.length}`);
       }
     };
     
     mediaRecorder.onstop = () => {
-      console.log('MediaRecorder onstop fired');
+      console.log('MediaRecorder onstop event');
       onRecordingStopped();
     };
     
     mediaRecorder.onerror = (event) => {
       console.error('MediaRecorder error:', event);
       showError(`Recording error: ${event.error?.message || 'Unknown error'}`);
+      startBtn.disabled = false;
     };
 
     // Handle stream ending (user clicked "Stop sharing" in browser)
     videoTracks[0].onended = () => {
       console.log('Video track ended externally');
-      stopRecording();
+      doStopRecording();
     };
 
-    // Start recording
+    // Start recording - request data every second
     mediaRecorder.start(1000);
     startTime = Date.now();
     timerInterval = setInterval(updateTimer, 100);
@@ -165,6 +203,7 @@ async function startRecording() {
     
   } catch (err) {
     console.error('Error starting recording:', err);
+    startBtn.disabled = false;
     
     let errorMsg = 'Recording failed. ';
     
@@ -184,122 +223,78 @@ async function startRecording() {
   }
 }
 
-// Stop recording
-function stopRecording() {
-  console.log('stopRecording called');
-  console.log('mediaRecorder state:', mediaRecorder?.state);
+// Actually stop the recording
+function doStopRecording() {
+  console.log('doStopRecording called');
   
-  // Stop all stream tracks first
+  // Disable stop button to prevent double clicks
+  stopBtn.disabled = true;
+  
+  // First, stop the media recorder if it's recording
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    console.log('Calling mediaRecorder.stop()');
+    // Request any remaining data
+    mediaRecorder.requestData();
+    mediaRecorder.stop();
+  }
+  
+  // Then stop all tracks
   if (stream) {
+    console.log('Stopping stream tracks');
     stream.getTracks().forEach(track => {
-      console.log(`Stopping track: ${track.kind}`);
       track.stop();
     });
     stream = null;
   }
-  
-  // Stop the media recorder
-  if (mediaRecorder) {
-    if (mediaRecorder.state === 'recording') {
-      console.log('Stopping mediaRecorder...');
-      mediaRecorder.stop();
-    } else if (mediaRecorder.state === 'paused') {
-      mediaRecorder.resume();
-      mediaRecorder.stop();
-    } else {
-      console.log('MediaRecorder already inactive, showing save state');
-      onRecordingStopped();
-    }
-  } else {
-    console.log('No mediaRecorder, showing save state');
-    onRecordingStopped();
-  }
 }
 
-// Save recording - uses simple download link approach
-function saveRecording() {
-  console.log('saveRecording called');
+// Stop button handler
+function stopRecording() {
+  console.log('stopRecording called, mediaRecorder.state:', mediaRecorder?.state);
   
-  if (!recordedBlob || recordedBlob.size === 0) {
-    console.log('No blob or empty blob');
-    if (recordedChunks.length > 0) {
-      recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-      console.log('Created blob from chunks:', recordedBlob.size);
-    } else {
-      showError('No recording data to save.');
-      return;
-    }
+  if (!mediaRecorder) {
+    console.log('No mediaRecorder');
+    return;
   }
   
-  let filename = filenameEl.value.trim() || 'recording';
-  if (!filename.endsWith('.webm')) {
-    filename += '.webm';
+  if (mediaRecorder.state === 'inactive') {
+    console.log('Already stopped');
+    onRecordingStopped();
+    return;
   }
   
-  console.log(`Saving ${recordedBlob.size} bytes as ${filename}`);
-  
-  // Create download link and click it
-  const url = URL.createObjectURL(recordedBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  
-  // Append to body, click, and remove
-  document.body.appendChild(a);
-  console.log('Clicking download link...');
-  a.click();
-  
-  // Cleanup after a short delay
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    console.log('Download triggered, cleanup done');
-  }, 100);
+  doStopRecording();
 }
 
 // Reset for new recording
 function resetRecorder() {
   console.log('Resetting recorder');
+  
+  // Revoke old blob URL if exists
+  if (downloadLink.href && downloadLink.href.startsWith('blob:')) {
+    URL.revokeObjectURL(downloadLink.href);
+  }
+  
   recordedChunks = [];
-  recordedBlob = null;
   stream = null;
   mediaRecorder = null;
   startTime = null;
   timerEl.textContent = '00:00:00';
+  downloadLink.href = '#';
+  downloadLink.download = 'recording.webm';
+  startBtn.disabled = false;
+  stopBtn.disabled = false;
   hideError();
   showState('idle');
 }
 
 // Event listeners
-console.log('Setting up event listeners');
+startBtn.addEventListener('click', startRecording);
+stopBtn.addEventListener('click', stopRecording);
+newBtn.addEventListener('click', resetRecorder);
 
-startBtn.addEventListener('click', function(e) {
-  console.log('Start button clicked', e);
-  startRecording();
-});
-
-stopBtn.addEventListener('click', function(e) {
-  console.log('Stop button clicked', e);
-  stopRecording();
-});
-
-saveBtn.addEventListener('click', function(e) {
-  console.log('Save button clicked', e);
-  e.preventDefault();
-  saveRecording();
-});
-
-newBtn.addEventListener('click', function(e) {
-  console.log('New button clicked', e);
-  resetRecorder();
-});
-
-// Handle Enter key in filename input
-filenameEl.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    saveRecording();
-  }
-});
+// Update download filename when input changes
+filenameEl.addEventListener('input', updateDownloadFilename);
+filenameEl.addEventListener('change', updateDownloadFilename);
 
 console.log('Recorder initialized');
