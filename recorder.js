@@ -44,7 +44,7 @@ function showError(msg) {
   }
 }
 
-// Hide error message
+// Hide error message  
 function hideError() {
   if (errorEl) {
     errorEl.classList.add('hidden');
@@ -53,6 +53,7 @@ function hideError() {
 
 // Show specific state
 function showState(state) {
+  console.log('Switching to state:', state);
   idleState.classList.add('hidden');
   recordingState.classList.add('hidden');
   saveState.classList.add('hidden');
@@ -64,9 +65,34 @@ function showState(state) {
   dot.classList.toggle('recording', state === 'recording');
 }
 
+// Called when recording is fully stopped
+function onRecordingStopped() {
+  console.log('Recording stopped, chunks:', recordedChunks.length);
+  
+  // Stop the timer
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  
+  // Update final time display
+  if (startTime) {
+    finalTimeEl.textContent = formatTime(Date.now() - startTime);
+  }
+  
+  // Generate default filename
+  const now = new Date();
+  const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  filenameEl.value = `recording-${timestamp}`;
+  
+  // Show save state
+  showState('save');
+}
+
 // Start recording
 async function startRecording() {
   hideError();
+  console.log('Starting recording...');
   
   try {
     // Request screen/tab capture
@@ -77,7 +103,7 @@ async function startRecording() {
       audio: true
     });
 
-    // Log what we got
+    console.log('Got stream');
     const videoTracks = stream.getVideoTracks();
     const audioTracks = stream.getAudioTracks();
     console.log(`Video tracks: ${videoTracks.length}, Audio tracks: ${audioTracks.length}`);
@@ -87,7 +113,7 @@ async function startRecording() {
     // Find supported mime type
     const mimeTypes = [
       'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp8,opus', 
       'video/webm;codecs=vp9',
       'video/webm;codecs=vp8',
       'video/webm'
@@ -99,43 +125,35 @@ async function startRecording() {
     mediaRecorder = new MediaRecorder(stream, { mimeType });
     
     mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
+      if (event.data && event.data.size > 0) {
         recordedChunks.push(event.data);
-        console.log(`Chunk received: ${event.data.size} bytes`);
+        console.log(`Chunk: ${event.data.size} bytes, total chunks: ${recordedChunks.length}`);
       }
     };
     
     mediaRecorder.onstop = () => {
-      console.log('MediaRecorder stopped');
-      finalTimeEl.textContent = timerEl.textContent;
-      showState('save');
-      
-      // Generate default filename with timestamp
-      const now = new Date();
-      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
-      filenameEl.value = `recording-${timestamp}`;
+      console.log('MediaRecorder onstop fired');
+      onRecordingStopped();
     };
     
     mediaRecorder.onerror = (event) => {
-      console.error('MediaRecorder error:', event.error);
-      showError(`Recording error: ${event.error.message}`);
+      console.error('MediaRecorder error:', event);
+      showError(`Recording error: ${event.error?.message || 'Unknown error'}`);
     };
 
     // Handle stream ending (user clicked "Stop sharing" in browser)
-    stream.getVideoTracks()[0].onended = () => {
-      console.log('Video track ended');
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        stopRecording();
-      }
+    videoTracks[0].onended = () => {
+      console.log('Video track ended externally');
+      stopRecording();
     };
 
-    // Start recording with 1-second chunks
+    // Start recording
     mediaRecorder.start(1000);
     startTime = Date.now();
-    timerInterval = setInterval(updateTimer, 1000);
+    timerInterval = setInterval(updateTimer, 100); // Update more frequently
     
     showState('recording');
-    console.log('Recording started');
+    console.log('Recording started successfully');
     
   } catch (err) {
     console.error('Error starting recording:', err);
@@ -143,15 +161,15 @@ async function startRecording() {
     let errorMsg = 'Recording failed. ';
     
     if (err.name === 'NotAllowedError') {
-      errorMsg = 'Permission denied or cancelled. Click "Start Recording" and select a tab to share.';
+      errorMsg = 'Permission denied. Click "Start Recording" and select a tab to share.';
     } else if (err.name === 'NotFoundError') {
       errorMsg = 'No screen or tab available to record.';
     } else if (err.name === 'AbortError') {
       errorMsg = 'Recording was cancelled.';
     } else if (err.name === 'NotSupportedError') {
-      errorMsg = 'Screen recording is not supported in this browser.';
+      errorMsg = 'Screen recording not supported in this browser.';
     } else {
-      errorMsg += err.message || 'Unknown error occurred.';
+      errorMsg += err.message || 'Unknown error.';
     }
     
     showError(errorMsg);
@@ -160,62 +178,86 @@ async function startRecording() {
 
 // Stop recording
 function stopRecording() {
-  console.log('Stopping recording...');
+  console.log('stopRecording called');
+  console.log('mediaRecorder state:', mediaRecorder?.state);
   
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-  }
+  // Stop all stream tracks first
   if (stream) {
     stream.getTracks().forEach(track => {
+      console.log(`Stopping track: ${track.kind}`);
       track.stop();
-      console.log(`Stopped track: ${track.kind}`);
     });
+    stream = null;
   }
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
+  
+  // Stop the media recorder
+  if (mediaRecorder) {
+    if (mediaRecorder.state === 'recording') {
+      console.log('Stopping mediaRecorder...');
+      mediaRecorder.stop();
+    } else if (mediaRecorder.state === 'paused') {
+      mediaRecorder.resume();
+      mediaRecorder.stop();
+    } else {
+      // Already inactive, manually trigger the save state
+      console.log('MediaRecorder already inactive, showing save state');
+      onRecordingStopped();
+    }
+  } else {
+    console.log('No mediaRecorder, showing save state');
+    onRecordingStopped();
   }
 }
 
 // Save recording
 function saveRecording() {
+  console.log('saveRecording called, chunks:', recordedChunks.length);
+  
   if (recordedChunks.length === 0) {
     showError('No recording data to save.');
     return;
   }
   
   const blob = new Blob(recordedChunks, { type: 'video/webm' });
-  const url = URL.createObjectURL(blob);
+  console.log(`Created blob: ${blob.size} bytes`);
   
   let filename = filenameEl.value.trim() || 'recording';
   if (!filename.endsWith('.webm')) {
     filename += '.webm';
   }
   
-  console.log(`Saving ${blob.size} bytes as ${filename}`);
+  // Create object URL
+  const url = URL.createObjectURL(blob);
+  console.log(`Saving as: ${filename}`);
   
-  // Use browser downloads API
+  // Use browser downloads API with save dialog
   browser.downloads.download({
     url: url,
     filename: filename,
-    saveAs: true
+    saveAs: true  // This should show the native save dialog
   }).then((downloadId) => {
-    console.log(`Download started: ${downloadId}`);
+    console.log(`Download started with ID: ${downloadId}`);
   }).catch(err => {
-    console.error('Download API error:', err);
-    // Fallback: create a link and click it
+    console.error('Download API failed:', err);
+    
+    // Fallback: use direct link download
     const a = document.createElement('a');
+    a.style.display = 'none';
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
   });
 }
 
 // Reset for new recording
 function resetRecorder() {
+  console.log('Resetting recorder');
   recordedChunks = [];
   stream = null;
   mediaRecorder = null;
@@ -226,10 +268,26 @@ function resetRecorder() {
 }
 
 // Event listeners
-startBtn.addEventListener('click', startRecording);
-stopBtn.addEventListener('click', stopRecording);
-saveBtn.addEventListener('click', saveRecording);
-newBtn.addEventListener('click', resetRecorder);
+console.log('Setting up event listeners');
+startBtn.addEventListener('click', () => {
+  console.log('Start button clicked');
+  startRecording();
+});
+
+stopBtn.addEventListener('click', () => {
+  console.log('Stop button clicked');
+  stopRecording();
+});
+
+saveBtn.addEventListener('click', () => {
+  console.log('Save button clicked');
+  saveRecording();
+});
+
+newBtn.addEventListener('click', () => {
+  console.log('New button clicked');
+  resetRecorder();
+});
 
 // Handle Enter key in filename input
 filenameEl.addEventListener('keypress', (e) => {
@@ -238,11 +296,4 @@ filenameEl.addEventListener('keypress', (e) => {
   }
 });
 
-// Focus filename input when save state appears
-const observer = new MutationObserver(() => {
-  if (!saveState.classList.contains('hidden')) {
-    filenameEl.focus();
-    filenameEl.select();
-  }
-});
-observer.observe(saveState, { attributes: true, attributeFilter: ['class'] });
+console.log('Recorder initialized');
