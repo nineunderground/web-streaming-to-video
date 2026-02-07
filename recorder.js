@@ -5,6 +5,7 @@ let recordedChunks = [];
 let stream = null;
 let startTime = null;
 let timerInterval = null;
+let recordedBlob = null;
 
 // DOM elements
 const idleState = document.getElementById('idleState');
@@ -75,6 +76,12 @@ function onRecordingStopped() {
     timerInterval = null;
   }
   
+  // Create the blob immediately
+  if (recordedChunks.length > 0) {
+    recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
+    console.log('Created blob:', recordedBlob.size, 'bytes');
+  }
+  
   // Update final time display
   if (startTime) {
     finalTimeEl.textContent = formatTime(Date.now() - startTime);
@@ -109,6 +116,7 @@ async function startRecording() {
     console.log(`Video tracks: ${videoTracks.length}, Audio tracks: ${audioTracks.length}`);
 
     recordedChunks = [];
+    recordedBlob = null;
     
     // Find supported mime type
     const mimeTypes = [
@@ -150,7 +158,7 @@ async function startRecording() {
     // Start recording
     mediaRecorder.start(1000);
     startTime = Date.now();
-    timerInterval = setInterval(updateTimer, 100); // Update more frequently
+    timerInterval = setInterval(updateTimer, 100);
     
     showState('recording');
     console.log('Recording started successfully');
@@ -199,7 +207,6 @@ function stopRecording() {
       mediaRecorder.resume();
       mediaRecorder.stop();
     } else {
-      // Already inactive, manually trigger the save state
       console.log('MediaRecorder already inactive, showing save state');
       onRecordingStopped();
     }
@@ -209,56 +216,52 @@ function stopRecording() {
   }
 }
 
-// Save recording
+// Save recording - uses simple download link approach
 function saveRecording() {
-  console.log('saveRecording called, chunks:', recordedChunks.length);
+  console.log('saveRecording called');
   
-  if (recordedChunks.length === 0) {
-    showError('No recording data to save.');
-    return;
+  if (!recordedBlob || recordedBlob.size === 0) {
+    console.log('No blob or empty blob');
+    if (recordedChunks.length > 0) {
+      recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
+      console.log('Created blob from chunks:', recordedBlob.size);
+    } else {
+      showError('No recording data to save.');
+      return;
+    }
   }
-  
-  const blob = new Blob(recordedChunks, { type: 'video/webm' });
-  console.log(`Created blob: ${blob.size} bytes`);
   
   let filename = filenameEl.value.trim() || 'recording';
   if (!filename.endsWith('.webm')) {
     filename += '.webm';
   }
   
-  // Create object URL
-  const url = URL.createObjectURL(blob);
-  console.log(`Saving as: ${filename}`);
+  console.log(`Saving ${recordedBlob.size} bytes as ${filename}`);
   
-  // Use browser downloads API with save dialog
-  browser.downloads.download({
-    url: url,
-    filename: filename,
-    saveAs: true  // This should show the native save dialog
-  }).then((downloadId) => {
-    console.log(`Download started with ID: ${downloadId}`);
-  }).catch(err => {
-    console.error('Download API failed:', err);
-    
-    // Fallback: use direct link download
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-  });
+  // Create download link and click it
+  const url = URL.createObjectURL(recordedBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  
+  // Append to body, click, and remove
+  document.body.appendChild(a);
+  console.log('Clicking download link...');
+  a.click();
+  
+  // Cleanup after a short delay
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    console.log('Download triggered, cleanup done');
+  }, 100);
 }
 
 // Reset for new recording
 function resetRecorder() {
   console.log('Resetting recorder');
   recordedChunks = [];
+  recordedBlob = null;
   stream = null;
   mediaRecorder = null;
   startTime = null;
@@ -269,29 +272,32 @@ function resetRecorder() {
 
 // Event listeners
 console.log('Setting up event listeners');
-startBtn.addEventListener('click', () => {
-  console.log('Start button clicked');
+
+startBtn.addEventListener('click', function(e) {
+  console.log('Start button clicked', e);
   startRecording();
 });
 
-stopBtn.addEventListener('click', () => {
-  console.log('Stop button clicked');
+stopBtn.addEventListener('click', function(e) {
+  console.log('Stop button clicked', e);
   stopRecording();
 });
 
-saveBtn.addEventListener('click', () => {
-  console.log('Save button clicked');
+saveBtn.addEventListener('click', function(e) {
+  console.log('Save button clicked', e);
+  e.preventDefault();
   saveRecording();
 });
 
-newBtn.addEventListener('click', () => {
-  console.log('New button clicked');
+newBtn.addEventListener('click', function(e) {
+  console.log('New button clicked', e);
   resetRecorder();
 });
 
 // Handle Enter key in filename input
 filenameEl.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
+    e.preventDefault();
     saveRecording();
   }
 });
