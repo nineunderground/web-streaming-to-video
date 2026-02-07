@@ -1,11 +1,13 @@
 {
   "manifest_version": 2,
   "name": "Tab Recorder",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Record the current browser tab with one click",
   "permissions": [
     "activeTab",
-    "downloads"
+    "downloads",
+    "tabs",
+    "<all_urls>"
   ],
   "browser_action": {
     "default_popup": "popup.html",
@@ -17,5 +19,12 @@
   "icons": {
     "48": "icons/record-48.png",
     "96": "icons/record-96.png"
-  }
+  },
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "web_accessible_resources": [
+    "recorder.html"
+  ]
 }

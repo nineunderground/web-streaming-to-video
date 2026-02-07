@@ -7,7 +7,7 @@
       box-sizing: border-box;
     }
     body {
-      width: 300px;
+      width: 260px;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
@@ -22,91 +22,6 @@
       align-items: center;
       gap: 8px;
     }
-    .status {
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      text-align: center;
-      font-weight: 500;
-    }
-    .status.idle {
-      background: #2d2d44;
-      color: #aaa;
-    }
-    .status.recording {
-      background: #4a1c1c;
-      color: #ff6b6b;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-    .timer {
-      font-size: 24px;
-      font-family: monospace;
-      text-align: center;
-      margin: 12px 0;
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    button:hover {
-      transform: scale(1.02);
-    }
-    button:active {
-      transform: scale(0.98);
-    }
-    #startBtn {
-      background: #e63946;
-      color: white;
-    }
-    #startBtn:hover {
-      background: #ff4757;
-    }
-    #stopBtn {
-      background: #2d2d44;
-      color: #fff;
-      border: 2px solid #e63946;
-    }
-    #stopBtn:hover {
-      background: #3d3d54;
-    }
-    .hidden {
-      display: none !important;
-    }
-    .filename-input {
-      margin-top: 12px;
-    }
-    .filename-input input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #444;
-      border-radius: 6px;
-      background: #2d2d44;
-      color: #fff;
-      font-size: 14px;
-      margin-top: 6px;
-    }
-    .filename-input input:focus {
-      outline: none;
-      border-color: #e63946;
-    }
-    #saveBtn {
-      margin-top: 10px;
-      background: #28a745;
-      color: white;
-    }
-    #saveBtn:hover {
-      background: #34ce57;
-    }
     .dot {
       width: 10px;
       height: 10px;
@@ -114,83 +29,37 @@
       border-radius: 50%;
       display: inline-block;
     }
-    .dot.recording {
-      animation: blink 1s infinite;
-    }
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-    .info {
-      font-size: 12px;
-      color: #888;
-      margin-top: 12px;
-      text-align: center;
-    }
-    .error {
-      background: #4a1c1c;
-      color: #ff6b6b;
-      padding: 10px;
-      border-radius: 6px;
-      margin-top: 12px;
-      font-size: 12px;
-      text-align: center;
-    }
-    .instructions {
-      background: #2d2d44;
-      padding: 10px;
-      border-radius: 6px;
-      margin-top: 12px;
-      font-size: 11px;
+    p {
       color: #aaa;
+      font-size: 12px;
+      margin: 0 0 16px 0;
+      line-height: 1.5;
     }
-    .instructions ol {
-      margin: 6px 0 0 0;
-      padding-left: 18px;
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #e63946;
+      color: white;
+      transition: all 0.2s;
     }
-    .instructions li {
-      margin: 4px 0;
+    button:hover {
+      background: #ff4757;
+      transform: scale(1.02);
     }
-    .instructions strong {
-      color: #fff;
+    button:active {
+      transform: scale(0.98);
     }
   </style>
 </head>
 <body>
-  <h3><span class="dot" id="dot"></span> Tab Recorder</h3>
-  
-  <div id="idleState">
-    <div class="status idle">Ready to record</div>
-    <button id="startBtn">🔴 Start Recording</button>
-    
-    <div class="instructions">
-      <strong>When prompted:</strong>
-      <ol>
-        <li>Select the <strong>tab</strong> you want to record</li>
-        <li>Check ✅ <strong>"Also share tab audio"</strong></li>
-        <li>Click <strong>Allow</strong></li>
-      </ol>
-    </div>
-    
-    <div id="errorMsg" class="error hidden"></div>
-  </div>
-
-  <div id="recordingState" class="hidden">
-    <div class="status recording">● Recording...</div>
-    <div class="timer" id="timer">00:00:00</div>
-    <button id="stopBtn">⏹ Stop Recording</button>
-    <div class="info">Click stop or close the sharing dialog to finish</div>
-  </div>
-
-  <div id="saveState" class="hidden">
-    <div class="status idle">Recording complete!</div>
-    <div class="timer" id="finalTime">00:00:00</div>
-    <div class="filename-input">
-      <label>Filename:</label>
-      <input type="text" id="filename" placeholder="my-recording">
-    </div>
-    <button id="saveBtn">💾 Save Video</button>
-  </div>
+  <h3><span class="dot"></span> Tab Recorder</h3>
+  <p>Opens a recorder window where you can capture any browser tab with audio.</p>
+  <button id="openRecorder">🎬 Open Recorder</button>
 
   <script src="popup.js"></script>
 </body>
